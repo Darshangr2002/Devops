@@ -1,0 +1,205 @@
+import java.util.*;
+
+class TreeNode {
+    String val;
+    List<TreeNode> children;
+    TreeNode parent;
+    int ancestorsLocked;
+    int descendantsLocked;
+    int userID;
+    boolean isLocked;
+
+    TreeNode(String value, TreeNode p) {
+        val = value;
+        parent = p;
+        ancestorsLocked = 0;
+        descendantsLocked = 0;
+        userID = 0;
+        isLocked = false;
+        children = new ArrayList<>();
+    }
+
+    void addChildren(List<String> childValues) {
+        for (String value : childValues) {
+            TreeNode child = new TreeNode(value, this);
+            children.add(child);
+        }
+    }
+}
+
+class TreeStructure {
+    private TreeNode root;
+    private Map<String, TreeNode> valueToNode;
+
+    TreeStructure(TreeNode r) {
+        root = r;
+        valueToNode = new HashMap<>();
+    }
+
+    TreeNode getRoot() {
+        return root;
+    }
+
+    void populateValueToNode(TreeNode node) {
+        if (node == null) return;
+
+        valueToNode.put(node.val, node);
+        for (TreeNode child : node.children)
+            populateValueToNode(child);
+    }
+
+    void updateDescendants(TreeNode node, int value) {
+        for (TreeNode child : node.children) {
+            child.ancestorsLocked += value;
+            updateDescendants(child, value);
+        }
+    }
+
+    boolean validateDescendants(TreeNode node, int id, List<TreeNode> lockedNodes) {
+        if (node.isLocked) {
+            if (node.userID != id)
+                return false;
+            lockedNodes.add(node);
+        }
+        if (node.descendantsLocked == 0)
+            return true;
+
+        boolean result = true;
+        for (TreeNode child : node.children) {
+            result &= validateDescendants(child, id, lockedNodes);
+            if (!result) return false;
+        }
+        return result;
+    }
+
+    boolean lockNode(String value, int id) {
+        TreeNode node = valueToNode.get(value);
+        if (node.isLocked) return false;
+
+        if (node.ancestorsLocked != 0) return false;
+        if (node.descendantsLocked != 0) return false;
+
+        TreeNode current = node.parent;
+        while (current != null) {
+            current.descendantsLocked++;
+            current = current.parent;
+        }
+
+        updateDescendants(node, 1);
+        node.isLocked = true;
+        node.userID = id;
+        return true;
+    }
+
+    boolean unlockNode(String value, int id) {
+        TreeNode node = valueToNode.get(value);
+        if (!node.isLocked) return false;
+        if (node.isLocked && node.userID != id) return false;
+
+        TreeNode current = node.parent;
+        while (current != null) {
+            current.descendantsLocked--;
+            current = current.parent;
+        }
+
+        updateDescendants(node, -1);
+        node.isLocked = false;
+        return true;
+    }
+
+    boolean upgradeNode(String value, int id) {
+        TreeNode node = valueToNode.get(value);
+        if (node.isLocked) return false;
+
+        if (node.ancestorsLocked != 0) return false;
+        if (node.descendantsLocked == 0) return false;
+
+        List<TreeNode> lockedDescendants = new ArrayList<>();
+        if (validateDescendants(node, id, lockedDescendants)) {
+            for (TreeNode lockedNode : lockedDescendants) {
+                unlockNode(lockedNode.val, id);
+            }
+        } else {
+            return false;
+        }
+
+        lockNode(value, id);
+        return true;
+    }
+}
+
+class MainProgram {
+    static TreeNode constructTree(List<String> values, int m) {
+        int n = values.size();
+        Queue<TreeNode> nodeQueue = new LinkedList<>();
+        TreeNode root = new TreeNode(values.get(0), null);
+        nodeQueue.add(root);
+
+        int start = 1;
+        while (!nodeQueue.isEmpty()) {
+            TreeNode current = nodeQueue.remove();
+
+            if (start >= n) continue;
+
+            List<String> childValues = new ArrayList<>();
+            for (int i = start; i < start + m; i++)
+                childValues.add(values.get(i));
+            current.addChildren(childValues);
+            start += m;
+
+            for (TreeNode child : current.children)
+                nodeQueue.add(child);
+        }
+
+        return root;
+    }
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        int numNodes = scanner.nextInt();
+        int numChildren = scanner.nextInt();
+        int numQueries = scanner.nextInt();
+        scanner.nextLine(); // consume the remaining newline
+
+        List<String> values = new ArrayList<>();
+        for (int i = 0; i < numNodes; i++)
+            values.add(scanner.nextLine());
+
+        TreeNode root = constructTree(values, numChildren);
+
+        TreeStructure tree = new TreeStructure(root);
+        tree.populateValueToNode(tree.getRoot());
+
+        int opcode, uid;
+        String value;
+        for (int i = 0; i < numQueries; i++) {
+            opcode = scanner.nextInt();
+            value = scanner.next();
+            uid = scanner.nextInt();
+
+            switch (opcode) {
+                case 1:
+                    if (tree.lockNode(value, uid)) {
+                        System.out.println("true");
+                    } else {
+                        System.out.println("false");
+                    }
+                    break;
+                case 2:
+                    if (tree.unlockNode(value, uid)) {
+                        System.out.println("true");
+                    } else {
+                        System.out.println("false");
+                    }
+                    break;
+                case 3:
+                    if (tree.upgradeNode(value, uid)) {
+                        System.out.println("true");
+                    } else {
+                        System.out.println("false");
+                    }
+                    break;
+            }
+        }
+    }
+}

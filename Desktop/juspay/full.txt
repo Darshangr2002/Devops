@@ -1,0 +1,162 @@
+#include <iostream>
+#include <bits/stdc++.h>
+
+using namespace std;
+
+struct Node {
+    string name;
+    int lockedBy;
+    bool isLocked;
+    vector<Node*> children;
+    Node* parent;
+    set<Node*> lockedDescendants;
+
+    Node(string nodeName, Node* parentNode) {
+        name = nodeName;
+        lockedBy = -1;
+        parent = parentNode;
+        isLocked = false;
+    }
+
+    void addChild(vector<string>& childNames) {
+        for (string& childName : childNames) {
+            children.push_back(new Node(childName, this));
+        }
+    }
+};
+
+struct MTree {
+    Node* root;
+    unordered_map<string, Node*> nameToNodeMap;
+
+    MTree(string rootName) {
+        root = new Node(rootName, nullptr);
+    }
+
+    void buildMTree(vector<string>& nodes, int m) {
+        queue<Node*> q;
+        int k = 1, i, n = nodes.size();
+        q.push(root);
+        while (!q.empty()) {
+            Node* node = q.front();
+            q.pop();
+            nameToNodeMap[node->name] = node;
+            vector<string> childrenNames;
+            for (i = k; i < min(n, k + m); i++) {
+                childrenNames.push_back(nodes[i]);
+            }
+            node->addChild(childrenNames);
+            for (Node* child : node->children) {
+                q.push(child);
+            }
+            k = i;
+        }
+    }
+
+    void print(Node* node) {
+        if (!node) return;
+        cout << "Node: " << node->name << ", Locked By: " << node->lockedBy << "\n";
+        cout << "Children: ";
+        for (Node* child : node->children) {
+            cout << child->name << " ";
+        }
+        cout << "\n";
+        cout << "Locked Descendants: ";
+        for (Node* descendant : node->lockedDescendants) {
+            cout << descendant->name << " ";
+        }
+        cout << "\n";
+        for (Node* child : node->children) {
+            print(child);
+        }
+    }
+
+    void updateAncestors(Node* node, Node* current) {
+        while (node) {
+            node->lockedDescendants.insert(current);
+            node = node->parent;
+        }
+    }
+
+    bool lockNode(string nodeName, int id) {
+        Node* node = nameToNodeMap[nodeName];
+        if (node->isLocked || node->lockedDescendants.size()) return false;
+        Node* parent = node->parent;
+        while (parent) {
+            if (parent->isLocked) return false;
+            parent = parent->parent;
+        }
+        updateAncestors(node->parent, node);
+        node->isLocked = true;
+        node->lockedBy = id;
+        return true;
+    }
+
+    bool unlockNode(string nodeName, int id) {
+        Node* node = nameToNodeMap[nodeName];
+        if (!node->isLocked || node->lockedBy != id) return false;
+        Node* parent = node->parent;
+        while (parent) {
+            parent->lockedDescendants.erase(node);
+            parent = parent->parent;
+        }
+        node->isLocked = false;
+        node->lockedBy = -1;
+        return true;
+    }
+
+    bool upgradeLock(string nodeName, int id) {
+        Node* node = nameToNodeMap[nodeName];
+        if (node->isLocked || node->lockedDescendants.size() == 0) return false;
+        for (Node* descendant : node->lockedDescendants) {
+            if (descendant->lockedBy != id) return false;
+        }
+        Node* parent = node->parent;
+        while (parent) {
+            if (parent->isLocked) return false;
+            parent = parent->parent;
+        }
+        set<Node*> descendants = node->lockedDescendants;
+        for (Node* descendant : descendants) {
+            unlockNode(descendant->name, id);
+        }
+        lockNode(nodeName, id);
+        return true;
+    }
+};
+
+int main() {
+    int numNodes, m, numOperations, operationType, id;
+    string nodeName;
+    cin >> numNodes >> m >> numOperations;
+    vector<string> nodeNames(numNodes);
+    for (int i = 0; i < numNodes; i++) {
+        cin >> nodeNames[i];
+    }
+    MTree* tree = new MTree(nodeNames[0]);
+    tree->buildMTree(nodeNames, m);
+    // tree->print(tree->root);
+    while (numOperations--) {
+        cin >> operationType >> nodeName >> id;
+        if (operationType == 1) {
+            if (tree->lockNode(nodeName, id)) {
+                cout << "true";
+            } else {
+                cout << "false";
+            }
+        } else if (operationType == 2) {
+            if (tree->unlockNode(nodeName, id)) {
+                cout << "true";
+            } else {
+                cout << "false";
+            }
+        } else if (operationType == 3) {
+            if (tree->upgradeLock(nodeName, id)) {
+                cout << "true";
+            } else {
+                cout << "false";
+            }
+        }
+        cout << "\n";
+    }
+}

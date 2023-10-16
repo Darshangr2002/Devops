@@ -1,0 +1,219 @@
+#include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <queue>
+using namespace std;
+
+struct Node {
+    string value;
+    vector<Node*> children;
+    Node* parent;
+    int ancestorsLocked;
+    int descendantsLocked;
+    int userID;
+    bool isLocked;
+
+    Node(string val, Node* p) {
+        value = val;
+        parent = p;
+        ancestorsLocked = 0;
+        descendantsLocked = 0;
+        userID = 0;
+        isLocked = false;
+    }
+
+    void addChildren(const vector<string>& childValues) {
+        for (const auto& val : childValues) {
+            Node* child = new Node(val, this);
+            children.push_back(child);
+        }
+    }
+};
+
+class Tree {
+private:
+    Node* root;
+    unordered_map<string, Node*> valueToNode;
+
+public:
+    Tree(Node* r) : root(r) {}
+
+    Node* getRoot() const {
+        return root;
+    }
+
+    void fillValueToNode(Node* node) {
+        if (!node) return;
+
+        valueToNode[node->value] = node;
+        for (auto child : node->children)
+            fillValueToNode(child);
+    }
+
+    void informDescendants(Node* node, int value) {
+        for (auto child : node->children) {
+            child->ancestorsLocked += value;
+            informDescendants(child, value);
+        }
+    }
+
+    bool verifyDescendants(Node* node, int id, vector<Node*>& lockedNodes) {
+        if (node->isLocked) {
+            if (node->userID != id)
+                return false;
+            lockedNodes.push_back(node);
+        }
+        if (node->descendantsLocked == 0)
+            return true;
+
+        bool result = true;
+        for (auto child : node->children) {
+            result &= verifyDescendants(child, id, lockedNodes);
+            if (!result) return false;
+        }
+        return result;
+    }
+
+    bool lock(const string& value, int id) {
+        Node* node = valueToNode[value];
+        if (node->isLocked) return false;
+
+        if (node->ancestorsLocked != 0) return false;
+        if (node->descendantsLocked != 0) return false;
+
+        Node* current = node->parent;
+        while (current) {
+            current->descendantsLocked++;
+            current = current->parent;
+        }
+
+        informDescendants(node, 1);
+        node->isLocked = true;
+        node->userID = id;
+        return true;
+    }
+
+    bool unlock(const string& value, int id) {
+        Node* node = valueToNode[value];
+        if (!node->isLocked) return false;
+        if (node->isLocked && node->userID != id) return false;
+
+        Node* current = node->parent;
+        while (current) {
+            current->descendantsLocked--;
+            current = current->parent;
+        }
+
+        informDescendants(node, -1);
+        node->isLocked = false;
+        return true;
+    }
+
+    bool upgrade(const string& value, int id) {
+        Node* node = valueToNode[value];
+        if (node->isLocked) return false;
+
+        if (node->ancestorsLocked != 0) return false;
+        if (node->descendantsLocked == 0) return false;
+
+        vector<Node*> lockedDescendants;
+        if (verifyDescendants(node, id, lockedDescendants)) {
+            for (auto lockedNode : lockedDescendants) {
+                unlock(lockedNode->value, id);
+            }
+        } else {
+            return false;
+        }
+
+        lock(value, id);
+        return true;
+    }
+};
+
+Node* buildTree(const vector<string>& values, int m) {
+    int n = values.size();
+    queue<Node*> nodeQueue;
+    Node* root = new Node(values[0], nullptr);
+    nodeQueue.push(root);
+
+    int start = 1;
+    while (!nodeQueue.empty()) {
+        Node* current = nodeQueue.front();
+        nodeQueue.pop();
+
+        if (start >= n) continue;
+
+        vector<string> childValues;
+        for (int i = start; i < start + m; i++)
+            childValues.push_back(values[i]);
+        current->addChildren(childValues);
+        start += m;
+
+        for (auto child : current->children)
+            nodeQueue.push(child);
+    }
+
+    return root;
+}
+
+void printTree(Node* root) {
+    cout << "Parent: " << root->value << "\n";
+    cout << "Children:\n";
+    for (auto child : root->children) {
+        cout << child->value << " anc_locked: " << child->ancestorsLocked
+             << " dec_locked: " << child->descendantsLocked << " isLocked: "
+             << child->isLocked << " uid: " << child->userID << "\n";
+    }
+    cout << "\n";
+
+    for (auto child : root->children)
+        printTree(child);
+}
+
+int main() {
+    int n, m, q;
+    cin >> n >> m >> q;
+
+    vector<string> values(n);
+    for (int i = 0; i < n; i++)
+        cin >> values[i];
+
+    Node* root = buildTree(values, m);
+    // printTree(root);
+
+    Tree tree(root);
+    tree.fillValueToNode(tree.getRoot());
+
+    int opcode, uid;
+    string value;
+    for (int i = 0; i < q; i++) {
+        cin >> opcode >> value >> uid;
+        switch (opcode) {
+            case 1:
+                if (tree.lock(value, uid)) {
+                    cout << "true\n";
+                    // printTree(root);
+                } else {
+                    cout << "false\n";
+                }
+                break;
+            case 2:
+                if (tree.unlock(value, uid)) {
+                    cout << "true\n";
+                } else {
+                    cout << "false\n";
+                }
+                break;
+            case 3:
+                if (tree.upgrade(value, uid)) {
+                    cout << "true\n";
+                    // printTree(root);
+                } else {
+                    cout << "false\n";
+                }
+                break;
+        }
+    }
+
+    return 0;
+}
